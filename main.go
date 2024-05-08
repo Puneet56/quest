@@ -2,22 +2,56 @@ package main
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+// text - 15
+// selectSectionBorder 7
+// Active section border 2
+// Active entry 10
+// File info at bottom 12
+// Help text
+
+const (
+	COLOR_TEXT                  = "15"
+	COLOR_SELECTED              = "10"
+	COLOR_SECTION_BORDER        = "7"
+	COLOR_ACTIVE_SECTION_BORDER = "2"
+	COLOR_FILE_INFO             = "12"
+	COLOR_HELP_TEXT             = "1"
+)
+
+type DemoDir struct{}
+
+func (d *DemoDir) Name() string {
+	return "file"
+}
+
+func (d *DemoDir) IsDir() bool {
+	return false
+}
+
+type Pos struct {
+	X int
+	Y int
+}
+
+type Section struct {
+	entries []DemoDir
+}
+
 type model struct {
-	entries []fs.DirEntry
-	cursor  int
+	sections []Section
+	cursor   Pos
 }
 
 func initialModel(dir string) model {
 	return model{
-		entries: getDirEntries(dir),
-		cursor:  0,
+		sections: getDummyData(),
+		cursor:   Pos{0, 0},
 	}
 }
 
@@ -27,7 +61,6 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	case tea.KeyMsg:
 
 		switch msg.String() {
@@ -35,23 +68,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+			if m.cursor.Y > 0 {
+				m.cursor.Y--
 			}
 
 		case "down", "j":
-			if m.cursor < len(m.entries)-1 {
-				m.cursor++
+			s := m.sections[m.cursor.X]
+
+			if m.cursor.Y < len(s.entries)-1 {
+				m.cursor.Y++
 			}
 
+		case "left", "h":
+			if m.cursor.X > 0 {
+				m.cursor.X--
+			}
+
+		case "right", "l":
+			if m.cursor.X < len(m.sections)-1 {
+				m.cursor.X--
+			}
 		}
 	}
 
 	return m, nil
 }
 
-var style = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#FFFFFF"))
+var text = lipgloss.NewStyle().
+	Foreground(lipgloss.Color(COLOR_TEXT))
+
+var activeText = text.Foreground(lipgloss.Color(COLOR_SELECTED))
 
 var selectedStyle = lipgloss.NewStyle().
 	Bold(true).
@@ -69,16 +115,16 @@ var headingStyle = lipgloss.NewStyle().
 	Width(25)
 
 func (m model) View() string {
-	var h = headingStyle.Render("Quest") + "\n\n"
+	h := headingStyle.Render("Quest")
 
-	var sections = []string{}
+	sections := []string{}
 
-	var s = ""
-	for i, entry := range m.entries {
-		if i == m.cursor {
-			s += selectedStyle.Render(entry.Name())
+	s := ""
+	for i, entry := range m.sections[0].entries {
+		if i == m.cursor.Y {
+			s += activeText.Render(entry.Name())
 		} else {
-			s += style.Render(entry.Name())
+			s += text.Render(entry.Name())
 		}
 
 		if entry.IsDir() {
@@ -91,27 +137,11 @@ func (m model) View() string {
 	sections = append(sections, sectionStyle.Render(s))
 	s = ""
 
-	if m.entries[m.cursor].IsDir() {
-		entries := getDirEntries(m.entries[m.cursor].Name())
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				s += style.Render(entry.Name()) + "/" + "\n"
-			} else {
-				s += style.Render(entry.Name()) + "\n"
-			}
-		}
-
-		sections = append(sections, sectionStyle.Render(s))
-		s = ""
-	}
-
 	return lipgloss.JoinVertical(lipgloss.Top, h, lipgloss.JoinHorizontal(lipgloss.Left, sections...))
 }
 
 func main() {
 	dir, err := os.Getwd()
-
 	if err != nil {
 		panic(err)
 	}
@@ -124,12 +154,35 @@ func main() {
 	}
 }
 
-func getDirEntries(dir string) []fs.DirEntry {
-	f, err := os.ReadDir(dir)
+// func getDirEntries(dir string) []fs.DirEntry {
+// 	f, err := os.ReadDir(dir)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	if err != nil {
-		panic(err)
+// 	return f
+// }
+
+func getDummyData() []Section {
+	out := make([]Section, 0)
+
+	section1 := Section{
+		entries: make([]DemoDir, 10),
 	}
 
-	return f
+	out = append(out, section1)
+
+	section2 := Section{
+		entries: make([]DemoDir, 10),
+	}
+
+	out = append(out, section2)
+
+	section3 := Section{
+		entries: make([]DemoDir, 10),
+	}
+
+	out = append(out, section3)
+
+	return out
 }
