@@ -8,22 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// text - 15
-// selectSectionBorder 7
-// Active section border 2
-// Active entry 10
-// File info at bottom 12
-// Help text
-
-const (
-	COLOR_TEXT                  = "15"
-	COLOR_SELECTED              = "10"
-	COLOR_SECTION_BORDER        = "7"
-	COLOR_ACTIVE_SECTION_BORDER = "2"
-	COLOR_FILE_INFO             = "12"
-	COLOR_HELP_TEXT             = "1"
-)
-
 type DemoDir struct{}
 
 func (d *DemoDir) Name() string {
@@ -46,6 +30,8 @@ type Section struct {
 type model struct {
 	sections []Section
 	cursor   Pos
+	Width    int
+	Height   int
 }
 
 func initialModel(dir string) model {
@@ -86,56 +72,52 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "right", "l":
 			if m.cursor.X < len(m.sections)-1 {
-				m.cursor.X--
+				m.cursor.X++
 			}
 		}
+
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width
+		m.Height = msg.Height
 	}
 
 	return m, nil
 }
 
-var text = lipgloss.NewStyle().
-	Foreground(lipgloss.Color(COLOR_TEXT))
-
-var activeText = text.Foreground(lipgloss.Color(COLOR_SELECTED))
-
-var selectedStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#FF8800"))
-
-var sectionStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("#fff")).
-	Width(25).
-	Height(10)
-
-var headingStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#FF8800")).
-	Width(25)
-
 func (m model) View() string {
-	h := headingStyle.Render("Quest")
+	st := NewStyles(m.Width, m.Height)
+
+	h := st.Heading().Render("Quest")
 
 	sections := []string{}
 
-	s := ""
-	for i, entry := range m.sections[0].entries {
-		if i == m.cursor.Y {
-			s += activeText.Render(entry.Name())
-		} else {
-			s += text.Render(entry.Name())
+	for x, section := range m.sections {
+
+		s := ""
+		for y, entry := range section.entries {
+			if y == m.cursor.Y && x == m.cursor.X {
+				s += st.ActiveText().Render(entry.Name())
+			} else {
+				s += st.Text().Render(entry.Name())
+			}
+
+			if entry.IsDir() {
+				s += "/"
+			}
+
+			s += "\n"
+
 		}
 
-		if entry.IsDir() {
-			s += "/"
+		sectionStyle := st.SectionStyle()
+
+		if x > 0 {
+			sectionStyle = sectionStyle.BorderLeft(false)
 		}
 
-		s += "\n"
+		sections = append(sections, sectionStyle.Render(s))
+		s = ""
 	}
-
-	sections = append(sections, sectionStyle.Render(s))
-	s = ""
 
 	return lipgloss.JoinVertical(lipgloss.Top, h, lipgloss.JoinHorizontal(lipgloss.Left, sections...))
 }
@@ -146,9 +128,13 @@ func main() {
 		panic(err)
 	}
 
-	p := tea.NewProgram(initialModel(dir), tea.WithAltScreen())
+	m := initialModel(dir)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error: %v", &m)
+
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
